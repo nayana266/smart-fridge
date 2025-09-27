@@ -1,0 +1,23 @@
+{
+  "id": "demo-egg-spinach-wrap",
+  "title": "Egg & Spinach Wrap",
+  "servings": 2,
+  "ingredients": [
+    { "name": "egg", "quantity": 4, "unit": "piece" },
+    { "name": "spinach", "quantity": 60, "unit": "g" },
+    { "name": "tortilla", "quantity": 2, "unit": "piece" }
+  ],
+  "steps": [
+    { "number": 1, "text": "Beat eggs." },
+    { "number": 2, "text": "Sauté spinach, add eggs, scramble." },
+    { "number": 3, "text": "Fill tortillas and roll." }
+  ],
+  "sustainability_notes": {
+    "carbon_score_0_100": 72,
+    "summary": "Plant-lean with eggs; consider tofu swap.",
+    "swaps": [
+      { "from_item": "egg", "to_item": "tofu", "rationale": "Lower footprint" }
+    ]
+  },
+  "source": "demo"
+}
