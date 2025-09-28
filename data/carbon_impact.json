@@ -1,0 +1,62 @@
+[
+  {
+    "name": "beef, topside, cap off, raw",
+    "co2e_kg_per_kg": 63.5765743250653,
+    "tag": "high",
+    "category": "meat/poultry"
+  },
+  {
+    "name": "chicken, breast, flesh and skin, raw",
+    "co2e_kg_per_kg": 6.27591172029879,
+    "tag": "high",
+    "category": "meat/poultry"
+  },
+  {
+    "name": "pork, mince, 15-20% fat, raw",
+    "co2e_kg_per_kg": 3.79627793341094,
+    "tag": "medium",
+    "category": "meat/poultry"
+  },
+  {
+    "name": "milk, whole, 3.5 % fat",
+    "co2e_kg_per_kg": 0.3413811695480436,
+    "tag": "low",
+    "category": "milk/eggs/substitute products"
+  },
+  {
+    "name": "cheese, firm, danbo, 45 % fidm.",
+    "co2e_kg_per_kg": 4.113550908428574,
+    "tag": "medium",
+    "category": "milk/eggs/substitute products"
+  },
+  {
+    "name": "eggs, chicken, free-range hens , raw",
+    "co2e_kg_per_kg": 1.22763945576786,
+    "tag": "low",
+    "category": "milk/eggs/substitute products"
+  },
+  {
+    "name": "tomato, ripe, raw, origin unknown",
+    "co2e_kg_per_kg": 0.4562935032684718,
+    "tag": "low",
+    "category": "vegetables"
+  },
+  {
+    "name": "carrot, raw",
+    "co2e_kg_per_kg": 0.2944703987812383,
+    "tag": "low",
+    "category": "vegetables"
+  },
+  {
+    "name": "spinach, raw",
+    "co2e_kg_per_kg": 0.6169432018255381,
+    "tag": "low",
+    "category": "vegetables"
+  },
+  {
+    "name": "tofu, soy bean curd",
+    "co2e_kg_per_kg": 1.117064296784901,
+    "tag": "low",
+    "category": "prepared/preserved foods"
+  }
+]

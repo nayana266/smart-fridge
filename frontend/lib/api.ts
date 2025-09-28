@@ -27,22 +27,36 @@ export async function getPresignedUploadUrl(
   fileName: string,
   fileType: string
 ): Promise<PresignedUploadResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/presign`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      fileName,
-      fileType,
-    }),
-  })
+  console.log('Getting presigned URL for:', fileName, fileType)
+  console.log('API Base URL:', API_BASE_URL)
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/presign`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        fileName,
+        fileType,
+      }),
+    })
 
-  if (!response.ok) {
-    throw new Error(`Failed to get presigned URL: ${response.statusText}`)
+    console.log('Presign response status:', response.status)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('Presign failed:', response.status, errorText)
+      throw new Error(`Failed to get presigned URL: ${response.status} ${response.statusText} - ${errorText}`)
+    }
+
+    const result = await response.json()
+    console.log('Got presigned URL successfully')
+    return result
+  } catch (error) {
+    console.error('Presign error:', error)
+    throw error
   }
-
-  return response.json()
 }
 
 // Upload file directly to S3 using presigned URL
@@ -50,16 +64,31 @@ export async function uploadToS3(
   file: File,
   presignedUrl: string
 ): Promise<void> {
-  const response = await fetch(presignedUrl, {
-    method: 'PUT',
-    body: file,
-    headers: {
-      'Content-Type': file.type,
-    },
-  })
+  console.log('Starting S3 upload for:', file.name)
+  console.log('Presigned URL:', presignedUrl.substring(0, 100) + '...')
+  
+  try {
+    const response = await fetch(presignedUrl, {
+      method: 'PUT',
+      body: file,
+      headers: {
+        'Content-Type': file.type,
+      },
+    })
 
-  if (!response.ok) {
-    throw new Error(`Failed to upload to S3: ${response.statusText}`)
+    console.log('S3 upload response status:', response.status)
+    console.log('S3 upload response headers:', Object.fromEntries(response.headers.entries()))
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('S3 upload failed:', response.status, errorText)
+      throw new Error(`Failed to upload to S3: ${response.status} ${response.statusText} - ${errorText}`)
+    }
+    
+    console.log('S3 upload successful!')
+  } catch (error) {
+    console.error('S3 upload error:', error)
+    throw error
   }
 }
 

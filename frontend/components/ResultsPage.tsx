@@ -27,6 +27,7 @@ interface ResultsPageProps {
 
 export function ResultsPage({ results, uploadedImages, peopleCount, onReset }: ResultsPageProps) {
   const [activeTab, setActiveTab] = useState<'inventory' | 'recipes' | 'tips'>('inventory')
+  const [expandedRecipe, setExpandedRecipe] = useState<string | null>(null)
 
   const getCarbonBadgeColor = (impact: 'low' | 'medium' | 'high') => {
     switch (impact) {
@@ -224,20 +225,8 @@ export function ResultsPage({ results, uploadedImages, peopleCount, onReset }: R
                   transition={{ delay: index * 0.1 }}
                   className="card overflow-hidden"
                 >
-                  <div className="aspect-video bg-gray-100 relative">
-                    {recipe.imageUrl ? (
-                      <Image
-                        src={recipe.imageUrl}
-                        alt={recipe.title}
-                        fill
-                        className="object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <ChefHat className="w-12 h-12 text-gray-400" />
-                      </div>
-                    )}
-                    <div className="absolute top-4 right-4">
+                  <div className="p-4 bg-gray-50 border-b border-gray-200">
+                    <div className="flex justify-end">
                       <span className={`badge ${getCarbonBadgeColor(recipe.carbonImpact)}`}>
                         {getCarbonBadgeText(recipe.carbonImpact)}
                       </span>
@@ -270,14 +259,45 @@ export function ResultsPage({ results, uploadedImages, peopleCount, onReset }: R
                     </div>
 
                     <div className="flex space-x-3">
-                      <button className="btn btn-primary btn-md flex-1">
-                        View Recipe
+                      <button 
+                        className="btn btn-primary btn-md flex-1"
+                        onClick={() => setExpandedRecipe(expandedRecipe === recipe.id ? null : recipe.id)}
+                      >
+                        {expandedRecipe === recipe.id ? 'Hide Details' : 'View Recipe'}
                         <ArrowRight className="w-4 h-4 ml-2" />
                       </button>
-                      <button className="btn btn-outline btn-md">
+                      <button 
+                        className="btn btn-outline btn-md"
+                        onClick={() => {
+                          // Copy recipe to clipboard
+                          const recipeText = `${recipe.title}\n\nIngredients:\n${recipe.ingredients.join(', ')}\n\nInstructions:\n${recipe.instructions.map((step, i) => `${i + 1}. ${step}`).join('\n')}`
+                          navigator.clipboard.writeText(recipeText)
+                        }}
+                      >
                         <ExternalLink className="w-4 h-4" />
                       </button>
                     </div>
+                    
+                    {expandedRecipe === recipe.id && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mt-4 pt-4 border-t border-gray-200"
+                      >
+                        <h4 className="font-semibold text-gray-900 mb-3">Instructions:</h4>
+                        <ol className="space-y-2">
+                          {recipe.instructions.map((instruction, idx) => (
+                            <li key={idx} className="flex items-start">
+                              <span className="flex-shrink-0 w-6 h-6 bg-primary text-white text-sm rounded-full flex items-center justify-center mr-3 mt-0.5">
+                                {idx + 1}
+                              </span>
+                              <span className="text-gray-700">{instruction}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      </motion.div>
+                    )}
                   </div>
                 </motion.div>
               ))}

@@ -16,8 +16,15 @@ class DetectionResult:
     confidence: float
 
 class RekognitionService:
-    def __init__(self, region_name: str = "us-east-1"):
-        self.rekognition = boto3.client('rekognition', region_name=region_name)
+    def __init__(self, region_name: str = "us-east-2"):
+        # Use environment variables or default credential chain
+        import os
+        self.rekognition = boto3.client(
+            'rekognition',
+            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
+            region_name=region_name
+        )
         self.rate_limit_tokens = 10  # Simple token bucket
         self.max_tokens = 10
         self.last_refill = time.time()
@@ -57,8 +64,8 @@ class RekognitionService:
                             'Name': key
                         }
                     },
-                    MaxLabels=50,
-                    MinConfidence=0.45
+                    MaxLabels=10,  # Even more focused on top detections
+                    MinConfidence=0.80  # Much higher threshold for accuracy
                 )
                 
                 return response.get('Labels', [])
@@ -66,6 +73,7 @@ class RekognitionService:
             except (ClientError, BotoCoreError) as e:
                 if attempt == max_retries - 1:
                     logger.error(f"Failed to detect labels for {key} after {max_retries} attempts: {e}")
+                    logger.error(f"Error type: {type(e).__name__}")
                     raise
                 
                 # Exponential backoff
@@ -75,11 +83,13 @@ class RekognitionService:
         
         return []
     
-    async def detect_food_items(self, s3_keys: List[str], bucket: str = "smart-fridge-images") -> List[DetectionResult]:
+    async def detect_food_items(self, s3_keys: List[str], bucket: str = "smart-fridge-images-nayana") -> List[DetectionResult]:
         """
         Detect food items from multiple S3 images
         Returns normalized results with counts and confidence scores
         """
+        logger.info(f"Starting detect_food_items for {len(s3_keys)} images in bucket {bucket}")
+        logger.info(f"Image keys: {s3_keys}")
         all_labels = []
         
         # Process images concurrently but with rate limiting
@@ -90,6 +100,7 @@ class RekognitionService:
         
         # Execute all detection tasks
         results = await asyncio.gather(*tasks, return_exceptions=True)
+        logger.info(f"Got {len(results)} results from AWS Rekognition")
         
         # Process results
         for i, result in enumerate(results):
@@ -97,11 +108,13 @@ class RekognitionService:
                 logger.error(f"Failed to process image {s3_keys[i]}: {result}")
                 continue
             
+            logger.info(f"Processing {len(result)} labels from image {s3_keys[i]}")
             for label in result:
                 all_labels.append({
                     'name': label['Name'].lower(),
                     'confidence': label['Confidence']
                 })
+                logger.info(f"Added label: {label['Name']} (confidence: {label['Confidence']:.1f}%)")
         
         # Group and count items
         item_counts = {}
@@ -118,29 +131,41 @@ class RekognitionService:
         # Convert to DetectionResult objects with food filtering
         detection_results = []
         
-        # Food-related keywords to filter for (expanded for pantry scenarios)
-        food_keywords = [
-            'food', 'fruit', 'vegetable', 'meat', 'dairy', 'drink', 'beverage',
-            'bread', 'milk', 'cheese', 'egg', 'eggs', 'chicken', 'beef', 'pork',
-            'apple', 'banana', 'orange', 'tomato', 'carrot', 'lettuce', 'spinach',
-            'broccoli', 'pepper', 'mushroom', 'onion', 'garlic', 'rice', 'pasta',
-            'potato', 'fish', 'salmon', 'tofu', 'bean', 'lentil', 'nut', 'avocado',
-            'olive', 'oil', 'butter', 'salt', 'pepper', 'honey', 'sugar', 'flour',
-            'cereal', 'snack', 'cracker', 'chip', 'popcorn', 'juice', 'soda',
-            'yogurt', 'ice cream', 'frozen', 'canned', 'sauce', 'condiment',
-            'spice', 'herb', 'grain', 'seed', 'berry', 'citrus', 'leafy green',
-            'protein', 'carbohydrate', 'vitamin', 'organic', 'fresh', 'raw',
-            'grape', 'grapes', 'peach', 'apricot', 'plum', 'pear', 'lemon', 'lime',
-            'strawberry', 'blueberry', 'raspberry', 'blackberry', 'cherry',
-            'pepper', 'bell pepper', 'sausage', 'salami', 'ham', 'bacon',
-            'pie', 'tart', 'quiche', 'cake', 'cookie', 'cracker'
-        ]
+        # Specific food items only - no generic terms like "food", "fruit"
+        specific_foods = [
+                   # Proteins
+                   'egg', 'eggs', 'chicken', 'beef', 'pork', 'fish', 'salmon', 'tofu', 
+                   'bean', 'lentil', 'nut', 'nuts', 'almond', 'walnut', 'cashew',
+                   'sausage', 'salami', 'ham', 'bacon', 'turkey', 'lamb',
+                   
+                   # Dairy
+                   'milk', 'cheese', 'yogurt', 'butter', 'cream', 'cottage cheese',
+                   
+                   # Fruits (specific)
+                   'apple', 'banana', 'orange', 'grape', 'grapes', 'peach', 'apricot', 
+                   'plum', 'pear', 'lemon', 'lime', 'strawberry', 'blueberry', 
+                   'raspberry', 'blackberry', 'cherry', 'kiwi', 'mango', 'pineapple',
+                   
+                   # Vegetables (specific)
+                   'tomato', 'carrot', 'lettuce', 'spinach', 'broccoli', 'pepper', 
+                   'bell pepper', 'mushroom', 'onion', 'garlic', 'potato', 'sweet potato',
+                   'cucumber', 'celery', 'corn', 'peas', 'beans', 'cabbage', 'cauliflower',
+                   
+                   # Grains & carbs
+                   'bread', 'rice', 'pasta', 'noodle', 'oats', 'cereal', 'flour', 'quinoa',
+                   
+                   # Other specific foods
+                   'pizza', 'sandwich', 'burger', 'soup', 'salad', 'pasta', 'pancake',
+                   'cookie', 'cake', 'pie', 'tart', 'muffin', 'bagel', 'cracker',
+                   'olive', 'olive oil', 'avocado', 'honey', 'sugar', 'salt', 'vinegar'
+               ]
         
         for name, confidence in item_counts.items():
-            # Only include items that are likely food-related
-            is_food = any(keyword in name.lower() for keyword in food_keywords)
+            # Only include specific food items - no generic terms
+            is_specific_food = any(food in name.lower() for food in specific_foods)
+            logger.info(f"Processing item: {name} (confidence: {confidence:.1f}%, is_specific_food: {is_specific_food})")
             
-            if is_food:
+            if is_specific_food:
                 # Use dynamic confidence thresholds based on item type
                 confidence_threshold = self._get_confidence_threshold(name, confidence)
                 
@@ -150,6 +175,9 @@ class RekognitionService:
                         count=1,  # Rekognition doesn't provide exact counts, assume 1 per detection
                         confidence=confidence / 100.0  # Convert to 0-1 scale
                     ))
+        
+        logger.info(f"Returning {len(detection_results)} detection results")
+        return detection_results
     
     def _get_confidence_threshold(self, name: str, confidence: float) -> float:
         """
@@ -160,7 +188,7 @@ class RekognitionService:
         
         # High confidence items (common, easily identifiable)
         high_confidence_items = [
-            'banana', 'apple', 'orange', 'milk', 'bread', 'egg', 'cheese', 
+            'banana', 'apple', 'orange', 'milk', 'bread', 'egg', 'eggs', 'cheese', 
             'chicken', 'beef', 'rice', 'pasta', 'tomato', 'carrot', 'lettuce'
         ]
         
@@ -193,16 +221,20 @@ class RekognitionService:
         if any(item in name_lower for item in excluded_items):
             return 100.0  # Effectively exclude by setting impossible threshold
         
+        # Special case for eggs - very high confidence required
+        if 'egg' in name_lower:
+            return 85.0  # Very high threshold for eggs specifically
+            
         if any(item in name_lower for item in high_confidence_items):
-            return 60.0  # High threshold for common items
+            return 75.0  # High threshold for accuracy
         elif any(item in name_lower for item in medium_confidence_items):
-            return 50.0  # Medium threshold
+            return 65.0  # High threshold
         elif any(item in name_lower for item in special_cases):
-            return 45.0  # Lower threshold for often-missed items
+            return 60.0  # High threshold for special items
         elif any(item in name_lower for item in lower_confidence_items):
-            return 55.0  # Higher threshold for generic terms
+            return 75.0  # Very high threshold for generic terms
         else:
-            return 50.0  # Default threshold
+            return 70.0  # High default threshold
 
 # Global instance
 rekognition_service = RekognitionService()

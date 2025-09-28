@@ -41,10 +41,37 @@ export function ImageUploader({ onImagesUploaded, isDemoMode }: ImageUploaderPro
         const file = newImages[i].file
         
         try {
+          // Convert image to JPEG format for better AWS Rekognition compatibility
+          let processedFile = file
+          let fileName = file.name
+          
+          if (file.type !== 'image/jpeg') {
+            const canvas = document.createElement('canvas')
+            const ctx = canvas.getContext('2d')
+            const img = new Image()
+            
+            await new Promise((resolve) => {
+              img.onload = () => {
+                canvas.width = img.width
+                canvas.height = img.height
+                ctx?.drawImage(img, 0, 0)
+                
+                canvas.toBlob((blob) => {
+                  if (blob) {
+                    fileName = fileName.replace(/\.[^/.]+$/, '.jpg')
+                    processedFile = new File([blob], fileName, { type: 'image/jpeg' })
+                  }
+                  resolve(null)
+                }, 'image/jpeg', 0.9)
+              }
+              img.src = URL.createObjectURL(file)
+            })
+          }
+          
           // Get presigned URL
           const { uploadUrl, key } = await getPresignedUploadUrl(
-            file.name,
-            file.type
+            fileName,
+            'image/jpeg'
           )
           
           // Update progress to 50%
@@ -57,7 +84,7 @@ export function ImageUploader({ onImagesUploaded, isDemoMode }: ImageUploaderPro
           )
           
         // Upload to S3
-        await uploadToS3(file, uploadUrl)
+        await uploadToS3(processedFile, uploadUrl)
           
           // Update progress to 100% and set S3 key
           setUploadedImages(prev => 

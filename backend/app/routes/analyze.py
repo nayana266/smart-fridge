@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import logging
 import os
+import time
 from app.services.rekog import rekognition_service, DetectionResult
 from app.services.normalize import food_normalizer, NormalizedItem
 
@@ -39,6 +40,10 @@ async def detect_food_items(request: VisionDetectRequest):
             s3_keys=request.keys,
             bucket=request.bucket
         )
+        
+        if raw_results is None:
+            logger.warning("Rekognition returned None, using empty results")
+            raw_results = []
         
         logger.info(f"Rekognition returned {len(raw_results)} raw detections")
         
@@ -122,87 +127,143 @@ class AnalyzeResponse(BaseModel):
 
 @router.post("/analyze", response_model=AnalyzeResponse)
 async def analyze_images(request: AnalyzeRequest):
-    """Simple analyze endpoint for frontend compatibility"""
+    """Full analysis pipeline using real AWS Rekognition and recipe generation"""
     try:
-        # For now, return mock data since we don't have full AWS integration
-        mock_inventory = [
-            {
-                "id": "1",
-                "name": "Organic Tomatoes",
-                "category": "Vegetables",
-                "quantity": "6 pieces",
-                "carbonImpact": "low",
-                "confidence": 0.92
-            },
-            {
-                "id": "2",
-                "name": "Ground Beef",
-                "category": "Meat",
-                "quantity": "1 lb",
-                "carbonImpact": "high",
-                "confidence": 0.88
-            },
-            {
-                "id": "3",
-                "name": "Milk",
-                "category": "Dairy",
-                "quantity": "1 gallon",
-                "carbonImpact": "medium",
-                "confidence": 0.95
-            }
-        ]
+        logger.info(f"Starting full analysis for {len(request.imageKeys)} images, {request.peopleCount} people")
         
-        mock_recipes = [
-            {
-                "id": "1",
-                "title": "Beef Bolognese",
-                "description": "Classic Italian pasta with ground beef and tomatoes",
-                "ingredients": ["Ground beef", "Tomatoes", "Onion", "Garlic", "Pasta"],
+        # Step 1: Vision Detection using AWS Rekognition
+        vision_request = VisionDetectRequest(
+            keys=request.imageKeys,
+            bucket="smart-fridge-images-nayana"
+        )
+        
+        vision_response = await detect_food_items(vision_request)
+        logger.info(f"Vision detection found {len(vision_response.items)} items")
+        
+        # Step 2: Convert vision results to inventory format
+        inventory = []
+        
+        for item in vision_response.items:
+            inventory.append({
+                "id": f"detected-{item['name']}-{int(time.time())}",
+                "name": item['name'],
+                "category": "Detected",
+                "quantity": f"{item['count']} piece(s)",
+                "carbonImpact": "medium",  # Default, will be updated by planner
+                "confidence": item['confidence']
+            })
+        
+        # Step 3: Get carbon impact and swap suggestions from planner
+        detected_food_names = [item['name'] for item in inventory]
+        
+        try:
+            # Import plan logic
+            from app.routes.plan import plan as plan_logic
+            plan_response = plan_logic(
+                items=detected_food_names,
+                people=request.peopleCount,
+                flags=[],
+                demo=False
+            )
+            
+            # Update inventory with carbon impact data
+            for i, inventory_item in enumerate(inventory):
+                if i < len(plan_response.inventory):
+                    plan_item = plan_response.inventory[i]
+                    inventory_item["carbonImpact"] = plan_item.impact
+                    inventory_item["category"] = plan_item.category
+            
+            # Convert swap suggestions
+            swap_tips = []
+            for swap in plan_response.swaps:
+                swap_tips.append({
+                    "id": f"swap-{swap.from_item}",
+                    "original": swap.from_item,
+                    "suggestion": swap.to,
+                    "reason": swap.why,
+                    "carbonSavings": swap.reduction
+                })
+            
+            total_carbon_impact = plan_response.score
+            
+        except Exception as e:
+            logger.warning(f"Planner failed, using defaults: {e}")
+            swap_tips = []
+            total_carbon_impact = 50  # Default score
+        
+        # Step 4: Generate recipes using LLM
+        recipes = []
+        if detected_food_names:  # Only generate recipes if we have detected items
+            try:
+                from app.services.recipes_llm import generate as generate_recipes_llm
+                from app.shared.models.recipe import LLMContext
+                
+                llm_context = LLMContext(
+                    pantry=detected_food_names,
+                    people=request.peopleCount,
+                    flags=[]
+                )
+                
+                generated_recipes = generate_recipes_llm(llm_context, demo=False)
+                
+                # Convert to frontend format
+                for recipe in generated_recipes:
+                    recipes.append({
+                        "id": f"recipe-{recipe.title.lower().replace(' ', '-')}",
+                        "title": recipe.title,
+                        "description": f"Generated recipe using {', '.join(detected_food_names[:3])}",
+                        "ingredients": [ing.name for ing in recipe.ingredients],
+                        "instructions": [step.text for step in recipe.steps],
+                        "carbonImpact": "medium",
+                        "prepTime": 30,
+                        "servings": request.peopleCount,
+                        "imageUrl": "/api/placeholder/400/300"
+                    })
+                    
+            except Exception as e:
+                logger.warning(f"Recipe generation failed: {e}")
+                # Fallback to simple recipes
+                recipes = [{
+                    "id": "recipe-fallback",
+                    "title": f"Simple {detected_food_names[0]} Recipe",
+                    "description": f"Quick recipe using {detected_food_names[0]}",
+                    "ingredients": detected_food_names[:3],
+                    "instructions": [
+                        f"Prepare {detected_food_names[0]}",
+                        "Cook according to your preference",
+                        "Season and serve"
+                    ],
+                    "carbonImpact": "medium",
+                    "prepTime": 15,
+                    "servings": request.peopleCount,
+                    "imageUrl": "/api/placeholder/400/300"
+                }]
+        else:
+            # No items detected - provide helpful message
+            logger.info("No food items detected in the uploaded images")
+            recipes = [{
+                "id": "no-items-detected",
+                "title": "No Items Detected",
+                "description": "We couldn't detect any food items in your images. Try uploading clearer images with visible food items.",
+                "ingredients": [],
                 "instructions": [
-                    "Brown the ground beef in a large pan",
-                    "Add diced onions and garlic",
-                    "Add tomatoes and simmer for 20 minutes",
-                    "Serve over cooked pasta"
+                    "Make sure your images show food items clearly",
+                    "Ensure good lighting in your photos",
+                    "Try taking photos from different angles",
+                    "Upload images in JPEG format for best results"
                 ],
-                "carbonImpact": "high",
-                "prepTime": 30,
+                "carbonImpact": "low",
+                "prepTime": 0,
                 "servings": request.peopleCount,
                 "imageUrl": "/api/placeholder/400/300"
-            },
-            {
-                "id": "2",
-                "title": "Tomato Basil Salad",
-                "description": "Fresh and light salad with tomatoes and basil",
-                "ingredients": ["Tomatoes", "Fresh basil", "Olive oil", "Salt", "Pepper"],
-                "instructions": [
-                    "Slice tomatoes",
-                    "Chop fresh basil",
-                    "Drizzle with olive oil",
-                    "Season with salt and pepper"
-                ],
-                "carbonImpact": "low",
-                "prepTime": 10,
-                "servings": request.peopleCount,
-                "imageUrl": "/api/placeholder/400/300"
-            }
-        ]
-        
-        mock_swap_tips = [
-            {
-                "id": "1",
-                "original": "Ground Beef",
-                "suggestion": "Lentils",
-                "reason": "Plant-based protein with 90% less carbon footprint",
-                "carbonSavings": 85
-            }
-        ]
+            }]
         
         return AnalyzeResponse(
-            inventory=mock_inventory,
-            recipes=mock_recipes,
-            swapTips=mock_swap_tips,
-            totalCarbonImpact=2.3,
-            analysisTime=8.5
+            inventory=inventory,
+            recipes=recipes,
+            swapTips=swap_tips,
+            totalCarbonImpact=total_carbon_impact,
+            analysisTime=time.time()
         )
         
     except Exception as e:

@@ -8,15 +8,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Check if we're in demo mode (no AWS credentials)
-DEMO_MODE = not os.getenv('AWS_ACCESS_KEY_ID')
+DEMO_MODE = not os.getenv('AWS_ACCESS_KEY_ID') and not os.getenv('AWS_PROFILE')
 
-# Initialize S3 client
+# Initialize S3 client using environment variables
 s3_client = boto3.client(
     's3',
     aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
     aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
-    aws_session_token=os.getenv('AWS_SESSION_TOKEN'),
-    region_name=os.getenv('AWS_DEFAULT_REGION', 'us-east-2')
+    region_name='us-east-2'
 )
 
 BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'smart-fridge-images-nayana')
