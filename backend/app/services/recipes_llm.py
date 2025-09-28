@@ -1,117 +1,122 @@
-from typing import List, Dict, Any
-import random
+import hashlib, json, os, time
+from typing import List
+from backend.app.shared.models.recipe import Recipe
+from backend.app.shared.models.recipe import Ingredient, Step
+from backend.app.shared.models.recipe import SustainabilityNotes
+from backend.app.shared.models.recipe import Swap
+from backend.app.shared.models.recipe import LLMContext
+from openai import OpenAI  # pip install openai
 
-def generate_recipes(inventory: List[Dict[str, Any]], people_count: int) -> List[Dict[str, Any]]:
-    """Generate recipe recommendations based on inventory and people count"""
-    
-    # Sample recipe database
-    recipe_database = [
-        {
-            'id': '1',
-            'title': 'Mediterranean Pasta',
-            'description': 'Fresh pasta with tomatoes, herbs, and olive oil',
-            'ingredients': ['pasta', 'tomato', 'onion', 'garlic', 'olive oil', 'herbs'],
-            'instructions': [
-                'Cook pasta according to package directions',
-                'Sauté diced onions and garlic in olive oil',
-                'Add chopped tomatoes and simmer for 10 minutes',
-                'Toss with cooked pasta and fresh herbs',
-                'Serve immediately'
-            ],
-            'carbonImpact': 'low',
-            'prepTime': 25,
-            'servings': 4,
-            'imageUrl': '/api/placeholder/400/300'
-        },
-        {
-            'id': '2',
-            'title': 'Garden Fresh Salad',
-            'description': 'Mixed greens with seasonal vegetables',
-            'ingredients': ['lettuce', 'tomato', 'carrot', 'onion', 'olive oil', 'vinegar'],
-            'instructions': [
-                'Wash and chop all vegetables',
-                'Combine in a large bowl',
-                'Whisk together olive oil and vinegar',
-                'Drizzle dressing over salad',
-                'Toss gently and serve'
-            ],
-            'carbonImpact': 'low',
-            'prepTime': 15,
-            'servings': 2,
-            'imageUrl': '/api/placeholder/400/300'
-        },
-        {
-            'id': '3',
-            'title': 'Stir-Fry Vegetables',
-            'description': 'Quick and healthy vegetable stir-fry',
-            'ingredients': ['broccoli', 'carrot', 'onion', 'garlic', 'soy sauce', 'oil'],
-            'instructions': [
-                'Cut vegetables into bite-sized pieces',
-                'Heat oil in a large pan or wok',
-                'Add garlic and onions, stir for 1 minute',
-                'Add remaining vegetables and stir-fry for 5-7 minutes',
-                'Add soy sauce and serve over rice'
-            ],
-            'carbonImpact': 'low',
-            'prepTime': 20,
-            'servings': 3,
-            'imageUrl': '/api/placeholder/400/300'
-        },
-        {
-            'id': '4',
-            'title': 'Fruit Smoothie Bowl',
-            'description': 'Nutritious smoothie bowl with fresh fruits',
-            'ingredients': ['banana', 'apple', 'milk', 'yogurt', 'honey'],
-            'instructions': [
-                'Blend banana, apple, and milk until smooth',
-                'Pour into a bowl',
-                'Top with yogurt and drizzle with honey',
-                'Add fresh fruit slices as garnish',
-                'Serve immediately'
-            ],
-            'carbonImpact': 'low',
-            'prepTime': 10,
-            'servings': 2,
-            'imageUrl': '/api/placeholder/400/300'
-        },
-        {
-            'id': '5',
-            'title': 'Vegetable Soup',
-            'description': 'Hearty vegetable soup perfect for any season',
-            'ingredients': ['tomato', 'carrot', 'onion', 'garlic', 'broccoli', 'vegetable broth'],
-            'instructions': [
-                'Sauté onions and garlic until fragrant',
-                'Add chopped vegetables and cook for 5 minutes',
-                'Add vegetable broth and bring to a boil',
-                'Simmer for 20-25 minutes until vegetables are tender',
-                'Season with salt and pepper to taste'
-            ],
-            'carbonImpact': 'low',
-            'prepTime': 35,
-            'servings': 4,
-            'imageUrl': '/api/placeholder/400/300'
-        }
-    ]
-    
-    # Filter recipes based on available ingredients
-    available_ingredients = [item['name'].lower() for item in inventory]
-    suitable_recipes = []
-    
-    for recipe in recipe_database:
-        recipe_ingredients = [ingredient.lower() for ingredient in recipe['ingredients']]
-        # Check if at least 60% of recipe ingredients are available
-        available_count = sum(1 for ingredient in recipe_ingredients if any(avail in ingredient or ingredient in avail for avail in available_ingredients))
-        if available_count >= len(recipe_ingredients) * 0.6:
-            # Adjust servings based on people count
-            adjusted_recipe = recipe.copy()
-            adjusted_recipe['servings'] = people_count
-            suitable_recipes.append(adjusted_recipe)
-    
-    # If no suitable recipes found, return some general recommendations
-    if not suitable_recipes:
-        suitable_recipes = random.sample(recipe_database, min(3, len(recipe_database)))
-        for recipe in suitable_recipes:
-            recipe['servings'] = people_count
-    
-    # Return top 3 recipes
-    return suitable_recipes[:3]
+_CACHE = {}  # key -> (ts, [Recipe])
+
+def _cache_get(k: str):
+    ts_rec = _CACHE.get(k)
+    if not ts_rec: return None
+    ts, recipes = ts_rec
+    if time.time() - ts > TTL_SECONDS:
+        _CACHE.pop(k, None)
+        return None
+    return recipes
+
+def _cache_set(k: str, recipes: List[Recipe]):
+    _CACHE[k] = (time.time(), recipes)
+
+
+def _cache_clear() -> None:
+    """Clear the in-memory recipe cache."""
+    _CACHE.clear()
+
+TTL_SECONDS = 1800  # 30 min
+
+def _build_prompt(ctx: LLMContext) -> str:
+    return f"""
+You are a sustainability-aware chef.
+Use ONLY these pantry items (plus water/salt/pepper/oil): {ctx.pantry}
+People to serve: {ctx.people}
+Dietary flags: {ctx.flags or []}
+Return STRICT JSON ONLY:
+{{
+ "recipes":[
+   {{
+     "id":"string",
+     "title":"string",
+     "servings": {ctx.people},
+     "ingredients":[{{"name":"string from pantry"}}],
+     "steps":[{{"number":1,"text":"..."}},{{"number":2,"text":"..."}}],
+     "sustainability_notes":{{"carbon_score_0_100":null,"summary":null,"swaps":[]}},
+     "source":"llm"
+   }}
+ ]
+}}
+No extra text. No markdown. Max 3 recipes. Steps <= 8.
+""".strip()
+
+def _call_llm_strict_json(ctx):
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    prompt = _build_prompt(ctx)
+    resp = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "You are a sustainability-minded chef that always replies with strict JSON recipes."},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.7,
+        response_format={"type": "json_object"},
+    )
+    return resp.choices[0].message.content
+
+def _key(ctx: LLMContext) -> str:
+    norm = {
+        "pantry": sorted([x.lower() for x in ctx.pantry]),
+        "people": ctx.people,
+        "flags": sorted([x.lower() for x in (ctx.flags or [])]),
+    }
+    return hashlib.sha256(json.dumps(norm, separators=(",",":")).encode()).hexdigest()
+
+def _fallback(ctx: LLMContext) -> List[Recipe]:
+    # Simple template recipes that only use pantry items; always valid.
+    base = Recipe(
+        id=f"fallback-{_key(ctx)[:8]}-1",
+        title="Pantry Bowl",
+        servings=ctx.people,
+        ingredients=[Ingredient(name=i) for i in ctx.pantry[:6]],
+        steps=[Step(number=1, text="Prep ingredients."),
+               Step(number=2, text="Cook and assemble.")],
+        sustainability_notes=SustainabilityNotes(summary="Uses what you have; plant-lean if available."),
+        source="fallback",
+    )
+    return [base, base.model_copy(update={"id": base.id.replace("-1","-2"), "title":"Quick Skillet"}),
+            base.model_copy(update={"id": base.id.replace("-1","-3"), "title":"Hearty Stir-fry"})]
+
+def generate(ctx: LLMContext, demo: bool = False) -> List[Recipe]:
+    k = _key(ctx)
+    hit = _cache_get(k)
+    if hit is not None:
+        return hit
+
+    if demo:
+        from pathlib import Path
+        APP_DIR = Path(__file__).resolve().parents[1]  # backend/app
+        data = json.loads((APP_DIR / "dev" / "fixtures" / "recipe_demo.json").read_text())
+        out = [Recipe(**data)]
+        _cache_set(k, out)
+        return out
+
+    try:
+        if not os.getenv("OPENAI_API_KEY"):
+            print("recipes_llm: no OPENAI_API_KEY, using fallback")
+            raise RuntimeError("no OPENAI_API_KEY")
+
+        raw = _call_llm_strict_json(ctx)
+        obj = json.loads(raw)
+        out = [Recipe(**r) for r in obj["recipes"]]
+        _cache_set(k, out)
+        print("recipes_llm: used LLM path")
+        return out
+    except Exception as e:
+        print("recipes_llm: falling back due to:", repr(e))
+        out = _fallback(ctx)
+        _cache_set(k, out)
+        return out
+
+
