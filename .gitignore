@@ -1,1 +1,38 @@
+# Node modules
 node_modules/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+env/
+venv/
+.env
+.venv
+
+# Distribution / packaging
+build/
+dist/
+.eggs/
+*.egg-info/
+
+# Pytest cache
+.pytest_cache/
+
+# VSCode
+.vscode/
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
+
+# Local env files
+*.env
+
+# Ignore compiled python files anywhere
+**/__pycache__/
+**/*.pyc

@@ -28,6 +28,13 @@ app.include_router(presign.router, prefix="/api", tags=["upload"])
 app.include_router(analyze.router, prefix="/api", tags=["analysis"])
 app.include_router(recipes.router, prefix="/api", tags=["recipes"])
 
+# Also include the same routers at root for compatibility with tests and some clients
+# (this registers endpoints both at /api/... and at /...)
+app.include_router(health.router, tags=["health"])
+app.include_router(presign.router, tags=["upload"])
+app.include_router(analyze.router, tags=["analysis"])
+app.include_router(recipes.router, tags=["recipes"])
+
 @app.get("/")
 async def root():
     return {"message": "Smart Fridge API is running!"}
