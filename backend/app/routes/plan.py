@@ -9,7 +9,7 @@ router = APIRouter()
 
 
 # Load your carbon dataset
-CARBON_LIST = json.load(open(os.path.join("data","carbon_impact.json")))
+CARBON_LIST = json.load(open(os.path.join(os.path.dirname(__file__), "../../../data","carbon_impact.json")))
 CARBON = {entry["name"].lower(): {
             "tag": entry["tag"],
             "co2e_100g": entry["co2e_kg_per_kg"]/10,  # kg -> 100gs
