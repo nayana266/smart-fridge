@@ -68,9 +68,60 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
   const [isDemoMode, setIsDemoMode] = useState(false)
 
-  const handleImagesUploaded = (images: UploadedImage[]) => {
+  const handleImagesUploaded = async (images: UploadedImage[]) => {
     setUploadedImages(images)
-    setCurrentStep('inventory')
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      // Get vision detection results for the uploaded images
+      const imageKeys = images
+        .filter(img => img.s3Key)
+        .map(img => img.s3Key!)
+      
+      if (imageKeys.length === 0) {
+        throw new Error('No images uploaded successfully')
+      }
+
+      // Call vision detection API
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/vision/detect`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          keys: imageKeys,
+          bucket: 'smart-fridge-images-nayana'
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to detect food items')
+      }
+
+      const visionResults = await response.json()
+      
+      // Convert vision results to inventory format
+      const detectedInventory: InventoryItem[] = visionResults.items.map((item: any, index: number) => ({
+        id: `detected-${item.name}-${Date.now()}-${index}`,
+        name: item.name,
+        category: 'Detected', // Will be updated by carbon planning
+        quantity: `${item.count} piece(s)`,
+        carbonImpact: 'medium', // Will be updated by carbon planning
+        confidence: item.confidence
+      }))
+
+      setInventory(detectedInventory)
+      setCurrentStep('inventory')
+    } catch (err) {
+      console.error('Vision detection failed:', err)
+      setError('Failed to detect food items. Please try again.')
+      // Fall back to empty inventory
+      setInventory([])
+      setCurrentStep('inventory')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleInventoryUpdated = (updatedInventory: InventoryItem[]) => {
@@ -92,7 +143,43 @@ export default function Home() {
         // Simulate loading time
         await new Promise(resolve => setTimeout(resolve, 2000))
       } else {
-        // Use real API
+        // Get carbon impact and planning data
+        const foodNames = inventory.map(item => item.name)
+        
+        // Call carbon planning API to get proper categories and carbon impacts
+        const planResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/plan`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            items: foodNames,
+            people: count,
+            flags: [],
+            demo: false
+          }),
+        })
+
+        if (planResponse.ok) {
+          const planData = await planResponse.json()
+          
+          // Update inventory with proper categories and carbon impacts
+          const updatedInventory = inventory.map(invItem => {
+            const planItem = planData.inventory.find((p: any) => 
+              p.name.toLowerCase() === invItem.name.toLowerCase()
+            )
+            return {
+              ...invItem,
+              category: planItem?.category || invItem.category,
+              carbonImpact: planItem?.impact === 'low' ? 'low' : 
+                           planItem?.impact === 'high' ? 'high' : 'medium'
+            }
+          })
+          
+          setInventory(updatedInventory)
+        }
+
+        // Use real API for full analysis
         const imageKeys = uploadedImages
           .filter(img => img.s3Key)
           .map(img => img.s3Key!)
@@ -136,10 +223,10 @@ export default function Home() {
           </div>
           <LoadingSpinner size="lg" />
           <h2 className="mt-4 text-xl font-semibold text-white">
-            Analyzing your fridge contents...
+            {currentStep === 'upload' ? 'Detecting food items in your images...' : 'Analyzing your fridge contents...'}
           </h2>
           <p className="mt-2 text-white/80">
-            This usually takes 5-10 seconds
+            {currentStep === 'upload' ? 'Identifying foods and calculating carbon impact...' : 'This usually takes 5-10 seconds'}
           </p>
         </div>
       </div>

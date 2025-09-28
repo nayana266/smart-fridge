@@ -22,56 +22,7 @@ export function InventoryChips({ inventory, onInventoryUpdated, onBack }: Invent
     carbonImpact: 'medium'
   })
 
-  // Mock AI-detected items for demo
-  const mockDetectedItems: InventoryItem[] = [
-    {
-      id: 'detected-1',
-      name: 'Organic Tomatoes',
-      category: 'Vegetables',
-      quantity: '6 pieces',
-      carbonImpact: 'low',
-      confidence: 0.92
-    },
-    {
-      id: 'detected-2',
-      name: 'Ground Beef',
-      category: 'Meat',
-      quantity: '1 lb',
-      carbonImpact: 'high',
-      confidence: 0.88
-    },
-    {
-      id: 'detected-3',
-      name: 'Whole Milk',
-      category: 'Dairy',
-      quantity: '1 gallon',
-      carbonImpact: 'medium',
-      confidence: 0.95
-    },
-    {
-      id: 'detected-4',
-      name: 'Cheddar Cheese',
-      category: 'Dairy',
-      quantity: '8 oz',
-      carbonImpact: 'medium',
-      confidence: 0.87
-    },
-    {
-      id: 'detected-5',
-      name: 'Spinach',
-      category: 'Vegetables',
-      quantity: '1 bag',
-      carbonImpact: 'low',
-      confidence: 0.91
-    }
-  ]
-
-  useEffect(() => {
-    if (inventory.length === 0) {
-      // Auto-populate with detected items
-      onInventoryUpdated(mockDetectedItems)
-    }
-  }, [inventory.length, onInventoryUpdated])
+  // No auto-population needed - inventory comes from real detection results
 
   const handleAddItem = () => {
     if (!newItem.name || !newItem.category || !newItem.quantity) {
