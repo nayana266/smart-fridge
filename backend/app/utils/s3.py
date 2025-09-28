@@ -6,12 +6,10 @@ from typing import Optional
 # Initialize S3 client
 s3_client = boto3.client(
     's3',
-    aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID', 'your-access-key'),
-    aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY', 'your-secret-key'),
-    region_name=os.getenv('AWS_REGION', 'us-east-1')
+    region_name=os.getenv('AWS_REGION', 'us-east-2')  # Use your region
 )
 
-BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'smart-fridge-uploads')
+BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'smart-fridge-images-nayana')
 
 def generate_presigned_url(key: str, content_type: str, expiration: int = 3600) -> str:
     """Generate a presigned URL for S3 upload"""
