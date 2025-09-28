@@ -1,5 +1,4 @@
 from fastapi import APIRouter
-<<<<<<< HEAD
 from datetime import datetime
 
 router = APIRouter()
@@ -10,17 +9,7 @@ async def health_check():
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
-        "service": "smart-fridge-api"
-=======
-
-router = APIRouter()
-
-@router.get("/")
-async def health_check():
-    """Basic health check endpoint"""
-    return {
-        "status": "healthy",
-        "service": "smart-fridge-backend",
+        "service": "smart-fridge-api",
         "version": "1.0.0"
     }
 
@@ -30,5 +19,4 @@ async def readiness_check():
     return {
         "status": "ready",
         "service": "smart-fridge-backend"
->>>>>>> 85cfca634be5e8ef45cb4dc555da76c75924dfa3
     }
