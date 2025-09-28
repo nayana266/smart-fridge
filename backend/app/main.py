@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import health, presign, analyze, recipes
+from app.routes import health, presign, analyze, recipes, plan
 from dotenv import load_dotenv
 import os
 
@@ -27,6 +27,7 @@ app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(presign.router, prefix="/api", tags=["upload"])
 app.include_router(analyze.router, prefix="/api", tags=["analysis"])
 app.include_router(recipes.router, prefix="/api", tags=["recipes"])
+app.include_router(plan.router, prefix="/api", tags=["planning"])
 
 @app.get("/")
 async def root():
