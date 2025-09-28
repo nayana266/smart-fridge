@@ -1,10 +1,10 @@
 import hashlib, json, os, time
 from typing import List
-from backend.app.shared.models.recipe import Recipe
-from backend.app.shared.models.recipe import Ingredient, Step
-from backend.app.shared.models.recipe import SustainabilityNotes
-from backend.app.shared.models.recipe import Swap
-from backend.app.shared.models.recipe import LLMContext
+from app.shared.models.recipe import Recipe
+from app.shared.models.recipe import Ingredient, Step
+from app.shared.models.recipe import SustainabilityNotes
+from app.shared.models.recipe import Swap
+from app.shared.models.recipe import LLMContext
 from openai import OpenAI  # pip install openai
 
 _CACHE = {}  # key -> (ts, [Recipe])

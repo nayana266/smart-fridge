@@ -107,6 +107,108 @@ async def detect_food_items(request: VisionDetectRequest):
             detail=f"Vision detection failed: {str(e)}"
         )
 
+# Simple analyze endpoint for frontend compatibility
+class AnalyzeRequest(BaseModel):
+    imageKeys: List[str]
+    peopleCount: int
+    inventory: Optional[List[Dict[str, Any]]] = None
+
+class AnalyzeResponse(BaseModel):
+    inventory: List[Dict[str, Any]]
+    recipes: List[Dict[str, Any]]
+    swapTips: List[Dict[str, Any]]
+    totalCarbonImpact: float
+    analysisTime: float
+
+@router.post("/analyze", response_model=AnalyzeResponse)
+async def analyze_images(request: AnalyzeRequest):
+    """Simple analyze endpoint for frontend compatibility"""
+    try:
+        # For now, return mock data since we don't have full AWS integration
+        mock_inventory = [
+            {
+                "id": "1",
+                "name": "Organic Tomatoes",
+                "category": "Vegetables",
+                "quantity": "6 pieces",
+                "carbonImpact": "low",
+                "confidence": 0.92
+            },
+            {
+                "id": "2",
+                "name": "Ground Beef",
+                "category": "Meat",
+                "quantity": "1 lb",
+                "carbonImpact": "high",
+                "confidence": 0.88
+            },
+            {
+                "id": "3",
+                "name": "Milk",
+                "category": "Dairy",
+                "quantity": "1 gallon",
+                "carbonImpact": "medium",
+                "confidence": 0.95
+            }
+        ]
+        
+        mock_recipes = [
+            {
+                "id": "1",
+                "title": "Beef Bolognese",
+                "description": "Classic Italian pasta with ground beef and tomatoes",
+                "ingredients": ["Ground beef", "Tomatoes", "Onion", "Garlic", "Pasta"],
+                "instructions": [
+                    "Brown the ground beef in a large pan",
+                    "Add diced onions and garlic",
+                    "Add tomatoes and simmer for 20 minutes",
+                    "Serve over cooked pasta"
+                ],
+                "carbonImpact": "high",
+                "prepTime": 30,
+                "servings": request.peopleCount,
+                "imageUrl": "/api/placeholder/400/300"
+            },
+            {
+                "id": "2",
+                "title": "Tomato Basil Salad",
+                "description": "Fresh and light salad with tomatoes and basil",
+                "ingredients": ["Tomatoes", "Fresh basil", "Olive oil", "Salt", "Pepper"],
+                "instructions": [
+                    "Slice tomatoes",
+                    "Chop fresh basil",
+                    "Drizzle with olive oil",
+                    "Season with salt and pepper"
+                ],
+                "carbonImpact": "low",
+                "prepTime": 10,
+                "servings": request.peopleCount,
+                "imageUrl": "/api/placeholder/400/300"
+            }
+        ]
+        
+        mock_swap_tips = [
+            {
+                "id": "1",
+                "original": "Ground Beef",
+                "suggestion": "Lentils",
+                "reason": "Plant-based protein with 90% less carbon footprint",
+                "carbonSavings": 85
+            }
+        ]
+        
+        return AnalyzeResponse(
+            inventory=mock_inventory,
+            recipes=mock_recipes,
+            swapTips=mock_swap_tips,
+            totalCarbonImpact=2.3,
+            analysisTime=8.5
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in analyze endpoint: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
 # Health check for vision service
 @router.get("/vision/health")
 async def vision_health():

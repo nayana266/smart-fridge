@@ -3,8 +3,8 @@ from fastapi import APIRouter, Query
 import json
 from pathlib import Path
 from typing import List
-from backend.app.shared.models.recipe import Recipe, LLMContext
-from backend.app.services.recipes_llm import generate
+from app.shared.models.recipe import Recipe, LLMContext
+from app.services.recipes_llm import generate
 
 router = APIRouter()
 
