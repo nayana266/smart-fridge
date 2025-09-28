@@ -56,8 +56,14 @@ export function ImageUploader({ onImagesUploaded, isDemoMode }: ImageUploaderPro
             )
           )
           
-          // Upload to S3
-          await uploadToS3(file, uploadUrl)
+          // Check if we're in demo mode (mock URL)
+          if (uploadUrl.includes('demo=true')) {
+            // In demo mode, skip actual S3 upload and simulate success
+            await new Promise(resolve => setTimeout(resolve, 1000)) // Simulate upload time
+          } else {
+            // Upload to S3 for real
+            await uploadToS3(file, uploadUrl)
+          }
           
           // Update progress to 100% and set S3 key
           setUploadedImages(prev => 
