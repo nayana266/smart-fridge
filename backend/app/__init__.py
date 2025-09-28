@@ -1,0 +1,1 @@
+# Smart Fridge Backend API
