@@ -46,3 +46,8 @@ class Recipe(BaseModel):
     source: Optional[str] = Field(
         None, description="generator/source (demo, LLM, curated, url, etc.)"
     )
+
+class LLMContext(BaseModel):
+    pantry: List[str] = Field(..., description="canonical ingredient names")
+    people: int = Field(..., ge=1)
+    flags: Optional[List[str]] = Field(default=[])

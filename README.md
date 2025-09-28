@@ -38,3 +38,13 @@ python -m backend.app.shared.models > backend/app/dev/schemas/recipe.schema.json
 - FastAPI routes can use `Recipe` as a response model to guarantee contract parity.
 - The unit test `backend/app/tests/test_recipe_model.py` ensures the demo fixture stays valid.
 
+### Demo Deliverable: `/analyze?demo=true`
+**Request**
+```http
+POST /analyze?demo=true
+Content-Type: application/json
+
+{
+  "people": 2,
+  "budget": 10
+}
