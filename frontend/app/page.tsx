@@ -65,12 +65,16 @@ export default function Home() {
   const [peopleCount, setPeopleCount] = useState<number>(2)
   const [results, setResults] = useState<AnalysisResults | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState('')
+  const [loadingSubMessage, setLoadingSubMessage] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isDemoMode, setIsDemoMode] = useState(false)
 
   const handleImagesUploaded = async (images: UploadedImage[]) => {
     setUploadedImages(images)
     setIsLoading(true)
+    setLoadingMessage('Detecting food items in your images...')
+    setLoadingSubMessage('Using AI vision to identify foods and calculate carbon impact...')
     setError(null)
 
     try {
@@ -139,10 +143,14 @@ export default function Home() {
 
       if (isDemoMode) {
         // Use mock data for demo mode
+        setLoadingMessage('Generating demo recipes...')
+        setLoadingSubMessage('Creating sample recipes and sustainability tips...')
         results = getMockAnalysisResults()
         // Simulate loading time
         await new Promise(resolve => setTimeout(resolve, 2000))
       } else {
+        setLoadingMessage('Analyzing your inventory...')
+        setLoadingSubMessage('Calculating carbon impact and finding sustainable swaps...')
         // Get carbon impact and planning data
         const foodNames = inventory.map(item => item.name)
         
@@ -182,6 +190,9 @@ export default function Home() {
         }
 
         // Use real API for full analysis with updated inventory
+        setLoadingMessage('Creating personalized recipes...')
+        setLoadingSubMessage('Using AI to generate custom recipes based on your ingredients...')
+        
         const imageKeys = uploadedImages
           .filter(img => img.s3Key)
           .map(img => img.s3Key!)
@@ -210,6 +221,8 @@ export default function Home() {
     setPeopleCount(2)
     setResults(null)
     setError(null)
+    setLoadingMessage('')
+    setLoadingSubMessage('')
   }
 
   const handleGetStarted = () => {
@@ -225,10 +238,10 @@ export default function Home() {
           </div>
           <LoadingSpinner size="lg" />
           <h2 className="mt-4 text-xl font-semibold text-white">
-            {currentStep === 'upload' ? 'Detecting food items in your images...' : 'Analyzing your fridge contents...'}
+            {loadingMessage || 'Processing...'}
           </h2>
           <p className="mt-2 text-white/80">
-            {currentStep === 'upload' ? 'Identifying foods and calculating carbon impact...' : 'This usually takes 5-10 seconds'}
+            {loadingSubMessage || 'Please wait while we analyze your data...'}
           </p>
         </div>
       </div>
