@@ -160,11 +160,13 @@ export default function Home() {
           }),
         })
 
+        let finalInventory = inventory
+        
         if (planResponse.ok) {
           const planData = await planResponse.json()
           
           // Update inventory with proper categories and carbon impacts
-          const updatedInventory = inventory.map(invItem => {
+          finalInventory = inventory.map(invItem => {
             const planItem = planData.inventory.find((p: any) => 
               p.name.toLowerCase() === invItem.name.toLowerCase()
             )
@@ -176,10 +178,10 @@ export default function Home() {
             }
           })
           
-          setInventory(updatedInventory)
+          setInventory(finalInventory)
         }
 
-        // Use real API for full analysis
+        // Use real API for full analysis with updated inventory
         const imageKeys = uploadedImages
           .filter(img => img.s3Key)
           .map(img => img.s3Key!)
@@ -188,7 +190,7 @@ export default function Home() {
           throw new Error('No images uploaded successfully')
         }
 
-        results = await analyzeImages(imageKeys, count, inventory)
+        results = await analyzeImages(imageKeys, count, finalInventory)
       }
       
       setResults(results)

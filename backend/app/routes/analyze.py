@@ -140,9 +140,10 @@ async def analyze_images(request: AnalyzeRequest):
         vision_response = await detect_food_items(vision_request)
         logger.info(f"Vision detection found {len(vision_response.items)} items")
         
-        # Step 2: Convert vision results to inventory format
+        # Step 2: Convert vision results to inventory format and combine with manual inventory
         inventory = []
         
+        # Add detected items from vision
         for item in vision_response.items:
             inventory.append({
                 "id": f"detected-{item['name']}-{int(time.time())}",
@@ -152,6 +153,28 @@ async def analyze_images(request: AnalyzeRequest):
                 "carbonImpact": "medium",  # Default, will be updated by planner
                 "confidence": item['confidence']
             })
+        
+        # Add manually added items from frontend
+        if request.inventory:
+            logger.info(f"Adding {len(request.inventory)} manually added items to inventory")
+            for item in request.inventory:
+                # Skip items that might be duplicates of detected items
+                is_duplicate = any(
+                    detected['name'].lower() == item['name'].lower() 
+                    for detected in vision_response.items
+                )
+                if not is_duplicate:
+                    inventory.append({
+                        "id": item.get('id', f"manual-{item['name']}-{int(time.time())}"),
+                        "name": item['name'],
+                        "category": item.get('category', 'Manual'),
+                        "quantity": item.get('quantity', '1 piece(s)'),
+                        "carbonImpact": item.get('carbonImpact', 'medium'),
+                        "confidence": item.get('confidence', 1.0)  # Manual items have high confidence
+                    })
+                    logger.info(f"Added manual item: {item['name']}")
+        
+        logger.info(f"Final inventory has {len(inventory)} items total")
         
         # Step 3: Get carbon impact and swap suggestions from planner
         detected_food_names = [item['name'] for item in inventory]
