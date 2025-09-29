@@ -19,48 +19,135 @@ export function InventoryChips({ inventory, onInventoryUpdated, onBack }: Invent
     name: '',
     category: '',
     quantity: '',
-    carbonImpact: 'medium'
+    carbonImpact: 'medium' // Will be calculated automatically
   })
 
   // No auto-population needed - inventory comes from real detection results
 
-  const handleAddItem = () => {
+  const handleAddItem = async () => {
     if (!newItem.name || !newItem.category || !newItem.quantity) {
       toast.error('Please fill in all required fields')
       return
     }
 
-    const item: InventoryItem = {
-      id: `item-${Date.now()}`,
-      name: newItem.name,
-      category: newItem.category,
-      quantity: newItem.quantity,
-      carbonImpact: newItem.carbonImpact || 'medium',
-      confidence: 1.0 // User-added items have 100% confidence
-    }
+    try {
+      // Calculate carbon impact automatically using the API
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/plan`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          items: [newItem.name],
+          people: 1,
+          flags: [],
+          demo: false
+        }),
+      })
 
-    onInventoryUpdated([...inventory, item])
-    setNewItem({ name: '', category: '', quantity: '', carbonImpact: 'medium' })
-    setIsAddingNew(false)
-    toast.success('Item added successfully')
+      let carbonImpact = 'medium' // default fallback
+      let finalCategory = newItem.category
+
+      if (response.ok) {
+        const planData = await response.json()
+        if (planData.inventory && planData.inventory.length > 0) {
+          const itemData = planData.inventory[0]
+          carbonImpact = itemData.impact === 'low' ? 'low' : 
+                        itemData.impact === 'high' ? 'high' : 'medium'
+          finalCategory = itemData.category || newItem.category
+        }
+      }
+
+      const item: InventoryItem = {
+        id: `item-${Date.now()}`,
+        name: newItem.name,
+        category: finalCategory,
+        quantity: newItem.quantity,
+        carbonImpact: carbonImpact,
+        confidence: 1.0 // User-added items have 100% confidence
+      }
+
+      onInventoryUpdated([...inventory, item])
+      setNewItem({ name: '', category: '', quantity: '', carbonImpact: 'medium' })
+      setIsAddingNew(false)
+      toast.success('Item added with automatic carbon calculation')
+    } catch (error) {
+      console.error('Failed to calculate carbon impact:', error)
+      // Fallback to manual addition with default carbon impact
+      const item: InventoryItem = {
+        id: `item-${Date.now()}`,
+        name: newItem.name,
+        category: newItem.category,
+        quantity: newItem.quantity,
+        carbonImpact: 'medium',
+        confidence: 1.0
+      }
+      onInventoryUpdated([...inventory, item])
+      setNewItem({ name: '', category: '', quantity: '', carbonImpact: 'medium' })
+      setIsAddingNew(false)
+      toast.success('Item added (carbon impact calculated offline)')
+    }
   }
 
   const handleEditItem = (item: InventoryItem) => {
     setEditingItem(item)
   }
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingItem?.name || !editingItem?.category || !editingItem?.quantity) {
       toast.error('Please fill in all required fields')
       return
     }
 
-    const updatedInventory = inventory.map(item =>
-      item.id === editingItem.id ? editingItem : item
-    )
-    onInventoryUpdated(updatedInventory)
-    setEditingItem(null)
-    toast.success('Item updated successfully')
+    try {
+      // Recalculate carbon impact automatically using the API
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/plan`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          items: [editingItem.name],
+          people: 1,
+          flags: [],
+          demo: false
+        }),
+      })
+
+      let updatedItem = { ...editingItem }
+
+      if (response.ok) {
+        const planData = await response.json()
+        if (planData.inventory && planData.inventory.length > 0) {
+          const itemData = planData.inventory[0]
+          const carbonImpact = itemData.impact === 'low' ? 'low' : 
+                              itemData.impact === 'high' ? 'high' : 'medium'
+          const finalCategory = itemData.category || editingItem.category
+          
+          updatedItem = {
+            ...editingItem,
+            carbonImpact: carbonImpact,
+            category: finalCategory
+          }
+        }
+      }
+
+      const updatedInventory = inventory.map(item =>
+        item.id === updatedItem.id ? updatedItem : item
+      )
+      onInventoryUpdated(updatedInventory)
+      setEditingItem(null)
+      toast.success('Item updated with automatic carbon recalculation')
+    } catch (error) {
+      console.error('Failed to recalculate carbon impact:', error)
+      // Fallback to manual update
+      const updatedInventory = inventory.map(item =>
+        item.id === editingItem.id ? editingItem : item
+      )
+      onInventoryUpdated(updatedInventory)
+      setEditingItem(null)
+      toast.success('Item updated (carbon impact unchanged)')
+    }
   }
 
   const handleRemoveItem = (itemId: string) => {
@@ -248,22 +335,12 @@ export function InventoryChips({ inventory, onInventoryUpdated, onBack }: Invent
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Carbon Impact
                 </label>
-                <select
-                  value={editingItem?.carbonImpact || newItem.carbonImpact || 'medium'}
-                  onChange={(e) => {
-                    const impact = e.target.value as 'low' | 'medium' | 'high'
-                    if (editingItem) {
-                      setEditingItem({ ...editingItem, carbonImpact: impact })
-                    } else {
-                      setNewItem({ ...newItem, carbonImpact: impact })
-                    }
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="low">Low Carbon</option>
-                  <option value="medium">Medium Carbon</option>
-                  <option value="high">High Carbon</option>
-                </select>
+                <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-600">
+                  Calculated automatically
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Carbon impact is calculated based on the food item
+                </p>
               </div>
             </div>
             <div className="flex justify-end space-x-3 mt-6">
